@@ -21,7 +21,6 @@ std::vector<int> outPins(coilPins, coilPins + sizeof(coilPins) / sizeof(coilPins
 
 int buttonState[sizeof(buttonPins) / sizeof(buttonPins[0])];
 
-
 void setup() {
     Serial.begin(115200);
 
@@ -31,6 +30,7 @@ void setup() {
     for (int val : outPins) {
         pinMode(val,OUTPUT);
     }
+    
     for (int val : buttonPins) {
         pinMode(val,INPUT_PULLUP);
     }
@@ -40,7 +40,7 @@ void loop() {
 
 }
 
-//chcek height, reset system etc
+//chcek height, reset, etc
 void onStart() {
 
 }
@@ -55,4 +55,14 @@ void onLoop() {
         printOut += "Button: " + String(button) + " State: " + String(buttonState[button]) + " | ";
     }
     Serial.println(printOut);
+}
+
+void goToFloor(int floor) {
+    if (floorHeight.find(floor) != floorHeight.end()) {
+        int height = floorHeight[floor];
+        Serial.println("Going to floor: " + String(floor) + " at height: " + String(height));
+        // stepper here
+    } else {
+        Serial.println("Invalid floor: " + String(floor));
+    }
 }
