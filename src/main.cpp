@@ -5,64 +5,148 @@
 #include <map>
 #include <vector>
 
-int Devices = 4;
-
-std::map<int, int> floorHeight = {
-    {1, 10},
-    {2, 20},
-    {3, 30}
-};
-
+//pins
 #define DisTRIG 4
 #define DisECHO 5
-const int buttonPins[] = {1,2,3};
-const int coilPins[] = {6,7,8};
-std::vector<int> outPins(coilPins, coilPins + sizeof(coilPins) / sizeof(coilPins[0]));
 
-int buttonState[sizeof(buttonPins) / sizeof(buttonPins[0])];
+//buttons mapped to Floor 1 through 3
+const int buttonPins[3] = {13, 12, 14};
+
+//stepper pins
+const int coilPins[4] = {26, 25, 33, 32};
+
+//floor heights in cm
+const float floorHeight[4] = {0.0, 10.0, 20.0, 30.0};
+const float TOLERANCE = 0.5;
+const int stepDelay = 2000;
+
+int currentTargetFloor = 1; 
+bool lastButtonState[3] = {HIGH, HIGH, HIGH};
+unsigned long lastButtonPress = 0;
+
+const int stepSequence[4][4] = {
+    {1, 0, 0, 0},
+    {0, 1, 0, 0},
+    {0, 0, 1, 0},
+    {0, 0, 0, 1}
+};
+int currentStep = 0;
+
+unsigned long lastSensorRead = 0;
+float lastError = 0.0;
+
+float getDist();
+void stepMotor(int direction);
+void stopMotor();
+void checkButtons();
+void updateClosedLoopControl();
 
 void setup() {
     Serial.begin(115200);
 
-    outPins.push_back(DisTRIG);
-    outPins.push_back(DisECHO);
-    
-    for (int val : outPins) {
-        pinMode(val,OUTPUT);
+    //ultrasonic sensor
+    pinMode(DisTRIG, OUTPUT);
+    pinMode(DisECHO, INPUT); // ECHO pin MUST be set as INPUT
+
+    //buttons
+    for (int i = 0; i < 3; i++) {
+        pinMode(buttonPins[i], INPUT_PULLUP);
     }
-    
-    for (int val : buttonPins) {
-        pinMode(val,INPUT_PULLUP);
+
+    //stepper
+    for (int i = 0; i < 4; i++) {
+        pinMode(coilPins[i], OUTPUT);
+        digitalWrite(coilPins[i], LOW);
     }
+
+    Serial.println("onstart");
 }
 
 void loop() {
-
+    checkButtons();
+    updateClosedLoopControl();
 }
 
-//chcek height, reset, etc
-void onStart() {
+float getDist() {
+    digitalWrite(DisTRIG, LOW);
+    delayMicroseconds(2);
+    digitalWrite(DisTRIG, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(DisTRIG, LOW);
 
+    //10ms timeout
+    long duration = pulseIn(DisECHO, HIGH, 10000);
+    if (duration == 0) return -1.0;
+    //distance in cm
+    return (duration * 0.0343) / 2.0;
 }
 
-//Read and print buttons mainly
-void onLoop() {
-    String printOut = "";
-
-    for (int button : buttonPins) {
-        buttonState[button] = !digitalRead(button);
-        
-        printOut += "Button: " + String(button) + " State: " + String(buttonState[button]) + " | ";
+//up = +1, down = -1
+void stepMotor(int direction) {
+    if (direction == 1) {
+        currentStep = (currentStep + 1) % 4;
+    } else if (direction == -1) {
+        currentStep = (currentStep - 1 + 4) % 4;
     }
-    Serial.println(printOut);
+
+    for (int pin = 0; pin < 4; pin++) {
+        digitalWrite(coilPins[pin], stepSequence[currentStep][pin]);
+    }
+}
+void stopMotor() {
+    for (int pin = 0; pin < 4; pin++) {
+        digitalWrite(coilPins[pin], LOW);
+    }
 }
 
-void goToFloor(int floor) {
-    if (floorHeight.find(floor) != floorHeight.end()) {
-        int height = floorHeight[floor];
-        Serial.println("Going to floor: " + String(floor) + " at height: " + String(height));
-        // stepper here
+void checkButtons() {
+    for (int i = 0; i < 3; i++) {
+        bool reading = digitalRead(buttonPins[i]);
+
+        if (lastButtonState[i] == HIGH && reading == LOW) {
+            if (millis() - lastButtonPress > 200) { 
+                currentTargetFloor = i + 1;
+                Serial.print("Target set to Floor ");
+                Serial.println(currentTargetFloor);
+                lastButtonPress = millis();
+            }
+        }
+        lastButtonState[i] = reading;
+    }
+}
+
+
+// the בקרה סגורה part 
+void updateClosedLoopControl() {
+    // read every 50ms
+    if (millis() - lastSensorRead >= 50) {
+        float currentHeight = getDist();
+        
+        if (currentHeight >= 0) { //error was valid
+            float targetHeight = floorHeight[currentTargetFloor];
+            lastError = targetHeight - currentHeight;
+        }
+        lastSensorRead = millis();
+    }
+
+    //printout
+    static unsigned long lastPrint = 0;
+    if (millis() - lastPrint > 500) {
+        Serial.print("Target: Floor ");
+        Serial.print(currentTargetFloor);
+        Serial.print(" | Error: ");
+        Serial.println(lastError);
+        lastPrint = millis();
+    }
+
+    //react to error
+    if (abs(lastError) <= TOLERANCE) {
+        stopMotor(); // good enough
+    } else if (lastError > 0) {
+        stepMotor(1); // move up
+        delayMicroseconds(stepDelay);
     } else {
-        Serial.println("Invalid floor: " + String(floor));
+        stepMotor(-1); // move down
+        delayMicroseconds(stepDelay);
     }
 }
