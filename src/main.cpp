@@ -6,11 +6,11 @@
 #include <vector>
 
 //pins
-#define DisTRIG 4
-#define DisECHO 5
+#define DisTRIG 12
+#define DisECHO 14
 
 //buttons mapped to Floor 1 through 3
-const int buttonPins[3] = {13, 12, 14};
+const int buttonPins[3] = {25, 17, 16};
 
 //stepper pins
 const int coilPins[4] = {26, 25, 33, 32};
@@ -101,7 +101,7 @@ void stopMotor() {
 
 void checkButtons() {
     for (int i = 0; i < 3; i++) {
-        bool reading = digitalRead(buttonPins[i]);
+        bool reading = !digitalRead(buttonPins[i]);
 
         if (lastButtonState[i] == HIGH && reading == LOW) {
             if (millis() - lastButtonPress > 200) { 
