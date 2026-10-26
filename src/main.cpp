@@ -6,18 +6,18 @@
 #include <vector>
 
 //pins
-#define DisTRIG 12
+#define DisTRIG 23
 #define DisECHO 14
 
 //buttons mapped to Floor 1 through 3
-const int buttonPins[3] = {25, 17, 16};
+const int buttonPins[3] = {19, 17, 16};
 
 //stepper pins
-const int coilPins[4] = {26, 25, 33, 32};
+const int coilPins[4] = {18, 5, 13, 12};
 
 //floor heights in cm
 const float floorHeight[4] = {0.0, 10.0, 20.0, 30.0};
-const float TOLERANCE = 0.5;
+const float TOLERANCE = 2;
 const int stepDelay = 2000;
 
 int currentTargetFloor = 1; 
@@ -106,8 +106,9 @@ void checkButtons() {
         if (lastButtonState[i] == HIGH && reading == LOW) {
             if (millis() - lastButtonPress > 200) { 
                 currentTargetFloor = i + 1;
-                Serial.print("Target set to Floor ");
-                Serial.println(currentTargetFloor);
+                Serial.print("\n !! Target set to Floor ");
+                Serial.print(currentTargetFloor);
+                Serial.println(" !! \n");
                 lastButtonPress = millis();
             }
         }
@@ -135,7 +136,9 @@ void updateClosedLoopControl() {
         Serial.print("Target: Floor ");
         Serial.print(currentTargetFloor);
         Serial.print(" | Error: ");
-        Serial.println(lastError);
+        Serial.print(lastError);
+        Serial.print(" | Distance: ");
+        Serial.println(getDist());
         lastPrint = millis();
     }
 
